@@ -20,6 +20,10 @@ func NewPlus(cont func(byte, []byte)) func([]byte) {
 	}
 }
 
+/*
+	THIS FUNCTION IS BROKEN AND I WILL FIX IT EVENTUALLY, PROBABLY.
+	UNLESS YOU DO IN WHICH CASE PLEASE SHARE IT WITH ME.
+*/
 func DeSequence(f func(int, byte, int, []byte)) (func(int, []byte), func(byte, []byte), func(int, []byte)) {
 
 	a, o := (*int)(nil), (*byte)(nil)
