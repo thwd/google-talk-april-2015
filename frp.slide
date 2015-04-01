@@ -1,0 +1,313 @@
+Functional Reactive Programming
+in the Go programming language
+
+Thomas Wilde
+me@thwd.me
+
+
+
+
+* Motivation
+
+.html nbsp.html
+
+Found somwehere on the internet:
+
+- "Go is too simple."
+- "Go ignores the last 30 years of programming language theory."
+
+
+* Motivation
+
+.html nbsp.html
+
+I disagree:
+
+- Most current trends are older than you might think.
+- Go learned from e.g. Java and C++ (exceptions/inheritance).
+- *If*you*want*it*complicated,*you*can*have*it*.
+
+
+* Functional Reactive Programming
+
+
+The newest, shiniest thing.
+
+.image rock.jpg _ 600
+.caption A rock, home to Patrick Star.
+
+
+* What is reactive programming?
+
+.image gophers-01.png _ 420
+
+* In traditional, imperative programming
+
+We're used to move _values_ around:
+
+    a = 1
+    b = 2
+    c = a + b
+
+*c* is 3 until we change it in another assignment:
+
+    c = 5
+
+Now *c* is 5.
+
+Easy.
+
+
+
+* In reactive programming
+
+We define _behaviors_ instead of _values_.
+
+    a = 1
+    b = 2
+    c = a + b
+
+*a*, *b* and *c* are _behaviors_.
+
+If we mutate a behavior, the change propagates forward:
+
+    a = 3
+
+now *a* is 3 and *c* is 5.
+
+Fun. Like MS Excel.
+
+
+
+* How is RP useful?
+
+* Reactive programming
+
+Lets you describe your program as expression trees:
+
+    unit_price  = 3.20
+    discount    = 0.20
+    quantity    = <input value>
+    subtotal    = quantity * unit_price
+    grand_total = subtotal - discount
+
+
+.image grandtotal.png _ 460
+
+* Hey, that's what functions are for!
+
+* Grand total
+
+Built with good old functions.
+
+.play functional.go /^func/,
+
+
+
+* Yes, that's an expression tree
+
+But it doesn't achieve the desired effect:
+
+- grand_total must be called periodically.
+- could be expensive.
+- may recurse infinitely.
+
+
+* Turn everything upside down!
+
+We want subtotal to call grand_total whenever it changes.
+
+.play upsidedown.go /^func/,
+
+
+* Yep, that's the right order of events
+
+But it has some problems:
+
+- subtotal depends on all parameters.
+- each node in the call-graph must know its continuation(s).
+- hard-wired dependencies everywhere.
+
+.image grandtotal.png _ 480
+
+
+* Continuation passing
+
+Separate control flow from data flow:
+
+.play continuous.go /^func/,
+
+
+
+
+* We're making progress
+
+It works! But this is ugly:
+
+.play continuous.go /^func main/,
+
+While the individual components of the system are now separated, their composition is still monolithic.
+
+
+
+
+* Composability
+
+Rewrite
+
+    func subtotal(quantity, unit_price float64, cont func(float64)) {
+        cont(quantity * unit_price)
+    }
+
+as a functional constructor:
+
+    func NewSubtotal(cont func(float64)) func(float64, float64) {
+        return func(quantity, unit_price float64) {
+            cont(quantity * unit_price)
+        }
+    }
+
+
+
+* Result
+
+Function composition
+
+.play separated.go /^func main/,
+
+Almost correct, except for *c*...
+
+
+* Something's off, boss!
+
+.image gophers-02.png _ 420
+
+
+
+* Technicalities
+
+We've been treating `quantity`, `unit_price` and `discount` as _values_. Let's change that:
+
+.code partial.go /^func/,
+
+But what should the ellipses ("...") be?
+
+
+
+
+* Filling the ellipses
+
+Does the following make sense, for instance?
+
+    quantity_input := NewFigure(subtotal)
+    unit_price     := NewFigure(subtotal)
+
+.image subtotal.png _ 460
+
+
+
+
+* Filling the ellipses (continued)
+
+.html nbsp.html
+
+Doesn't work:
+
+`subtotal` is `func(float64,`float64)`
+
+but
+
+`NewFigure` wants a `func(float64)`
+
+.html nbsp.html
+
+In other words: each "figure" provides 1 `float64` whereas `subtotal` requires 2.
+
+Solution: split `subtotal` into two `func(float64)` that synchronize.
+
+
+
+
+* Let's implement
+
+Splitting one behavior into two (not thread safe.)
+
+    func DeSync(f func(float64, float64)) (func(float64), func(float64)) {
+
+        var x, y *float64 = nil, nil
+
+        a := func(v float64) {
+            x = &v
+            if y != nil {
+                f(*x, *y)
+            }
+        }
+
+        b := func(v float64) {
+            y = &v
+            if x != nil {
+                f(*x, *y)
+            }
+        }
+
+        return a, b
+    }
+
+
+* Result
+
+Explicit call-graph.
+
+.play values.go /^func main/,
+
+
+* Aside: Rx, reflect, FuncOf #1996
+
+.image gophers-03.png _ 420
+
+
+* Doing something fun with all this
+
+"Recursive-ascent" parsing. Note the left recursion.
+
+   P = A
+   A = A '+' N | N
+   N = [0-9]
+
+.play grammar.go /^func main/,/N =/
+.caption (work in progress)
+
+
+
+
+* Tightly related
+
+Stuff that is similar in definition and properties:
+
+- Flow based programming
+
+    port1, port2 := DeSync(process)
+
+- Burritos!
+
+    m a -> (a -> m b) -> m b
+
+
+
+* Conclusions
+
+.html nbsp.html
+
+- Go has strong functional capabilities.
+- You can make Go code complicated.
+- Turning problems on their head yields new insights.
+- FRP is quite useful: exactly as useful as flow-based programming, in fact.
+- Reactive/Flow-oriented concepts can be found described in age-old papers.
+
+.html nbsp.html
+
+Extras (not covered in this presentation):
+
+- Most of this is straight-forward to make parallel/concurrent.
+- Building your call graph programmatically gives you a meta perspective.
+- Metaprogramming makes you think about types & type systems.
